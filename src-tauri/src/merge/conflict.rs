@@ -149,11 +149,23 @@ pub fn apply_resolution(
             while end < lines.len() && !lines[end].starts_with(">>>>>>>") {
                 end += 1;
             }
+            if end >= lines.len() {
+                // Unclosed conflict marker — preserve everything
+                for j in i..lines.len() {
+                    result.push(lines[j].to_string());
+                }
+                break;
+            }
             if let Some(resolved_hunk) = decision_map.get(&current_hunk) {
                 if !resolved_hunk.merged_content.is_empty() {
                     for content_line in resolved_hunk.merged_content.lines() {
                         result.push(content_line.to_string());
                     }
+                }
+            } else {
+                // Keep original conflict markers to prevent data loss
+                for j in i..=end {
+                    result.push(lines[j].to_string());
                 }
             }
             i = end + 1;
