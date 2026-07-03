@@ -64,11 +64,18 @@ pub fn verify(bundle_path: &Path) -> Result<BundleInfo, SneakerError> {
         return Err(SneakerError::BundleVerifyFailed(stderr.to_string()));
     }
 
-    let verify_stdout = String::from_utf8_lossy(&verify_output.stdout);
-    let head_commit = verify_stdout
+    // Get head commit from list-heads
+    let heads_output = ShellCommand::new("git")
+        .args(["bundle", "list-heads", &bundle_path.display().to_string()])
+        .output()
+        .map_err(|e| SneakerError::BundleVerifyFailed(e.to_string()))?;
+
+    let heads_stdout = String::from_utf8_lossy(&heads_output.stdout);
+    let head_commit = heads_stdout
         .lines()
-        .find(|l| l.len() == 40 && l.chars().all(|c| c.is_ascii_hexdigit()))
-        .map(|s| s[..7].to_string())
+        .next()
+        .and_then(|l| l.split_whitespace().next())
+        .map(|s| s[..7.min(s.len())].to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
     let metadata = std::fs::metadata(bundle_path)
@@ -120,7 +127,12 @@ mod tests {
 
         let info = verify(&bundle_path).unwrap();
         assert!(info.file_size > 0);
-        assert!(!info.head_commit.is_empty());
+        assert!(
+            info.head_commit.len() == 7
+                && info.head_commit.chars().all(|c| c.is_ascii_hexdigit()),
+            "head_commit should be a 7-char hex hash, got: {}",
+            info.head_commit
+        );
     }
 
     #[test]
