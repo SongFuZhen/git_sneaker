@@ -57,6 +57,7 @@ pub fn diff_commits(
             let path = delta
                 .new_file()
                 .path()
+                .or_else(|| delta.old_file().path())
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|| "unknown".to_string());
             let status = format!("{:?}", delta.status());
