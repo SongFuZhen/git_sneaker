@@ -1,0 +1,24 @@
+mod commands;
+mod engine;
+mod error;
+mod merge;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            // Commands registered in later tasks
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running GitSneaker");
+}
