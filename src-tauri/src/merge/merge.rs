@@ -23,6 +23,7 @@ pub fn pull_bundle(
             "-C",
             &repo.display().to_string(),
             "pull",
+            "--no-edit",
             &bundle_path.display().to_string(),
             branch,
         ])
