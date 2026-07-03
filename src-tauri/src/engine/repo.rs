@@ -67,7 +67,7 @@ pub fn get_last_sync_tag(
             if let Ok(commit) = tag_ref.peel_to_commit() {
                 let ts = commit.time().seconds();
                 if latest.is_none() || ts > latest.as_ref().unwrap().timestamp {
-                    let short = commit.as_object().short_id().unwrap();
+                    let short = commit.as_object().short_id().map_err(|e| SneakerError::from(e))?;
                     let short_str =
                         std::str::from_utf8(short.as_bytes()).unwrap_or("").to_string();
                     latest = Some(SyncPoint {
@@ -95,7 +95,7 @@ pub fn create_sync_tag(repo: &Repository, branch: &str) -> Result<SyncPoint, Sne
     repo.tag_lightweight(&tag_name, obj, false)
         .map_err(|e| SneakerError::GitError(e.message().to_string()))?;
 
-    let short = head_commit.as_object().short_id().unwrap();
+    let short = head_commit.as_object().short_id().map_err(|e| SneakerError::from(e))?;
     let short_str = std::str::from_utf8(short.as_bytes()).unwrap_or("").to_string();
 
     Ok(SyncPoint {
