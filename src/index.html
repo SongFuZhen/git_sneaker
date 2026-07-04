@@ -60,7 +60,39 @@
                 Copy the bundle file to your USB drive and transfer to the target machine.
             </div>
         </main>
-        <main v-else-if="currentView === 'import'" id="import-view"></main>
+        <main v-else-if="currentView === 'import'">
+            <div class="panel">
+                <div class="panel-header">Target Repository</div>
+                <div class="toolbar">
+                    <input type="text" :value="repoPath" readonly placeholder="Select target repository...">
+                    <button class="btn btn-secondary" @click="selectRepo">Browse...</button>
+                </div>
+                <div v-if="repoInfo" class="path-display">
+                    Branch: {{ repoInfo.head_branch }} | HEAD: {{ repoInfo.head_commit }}
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">Bundle File</div>
+                <div class="toolbar">
+                    <input type="text" :value="bundlePath" readonly placeholder="Select a .bundle file...">
+                    <button class="btn btn-secondary" @click="selectBundleFile">Browse...</button>
+                </div>
+                <div v-if="bundleInfo" class="path-display">
+                    Bundle HEAD: {{ bundleInfo.head_commit }} | Size: {{ (bundleInfo.file_size / 1024).toFixed(1) }} KB
+                </div>
+            </div>
+
+            <div class="toolbar" v-if="repoPath && bundlePath">
+                <button class="btn btn-primary" @click="doVerifyBundle" :disabled="importState === 'verifying'">Verify Bundle</button>
+                <button class="btn btn-success" @click="doExecImport" :disabled="importState === 'importing' || !bundleInfo">Import</button>
+            </div>
+
+            <div v-if="importState === 'done'" class="auto-report">
+                <div class="auto-report-header">Import Complete</div>
+                The bundle has been merged successfully with no conflicts.
+            </div>
+        </main>
         <main v-else-if="currentView === 'conflict'" id="conflict-view"></main>
 
         <footer class="status-bar">
