@@ -24,6 +24,8 @@ pub fn run() {
             commands::export::get_last_sync,
             commands::export::preview_export,
             commands::export::exec_export,
+            commands::import::verify_bundle,
+            commands::import::exec_import,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitSneaker");
