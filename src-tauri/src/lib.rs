@@ -26,6 +26,11 @@ pub fn run() {
             commands::export::exec_export,
             commands::import::verify_bundle,
             commands::import::exec_import,
+            commands::merge_cmd::get_conflicts,
+            commands::merge_cmd::auto_resolve_conflicts,
+            commands::merge_cmd::apply_resolution,
+            commands::merge_cmd::commit_merge,
+            commands::merge_cmd::abort_merge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitSneaker");
