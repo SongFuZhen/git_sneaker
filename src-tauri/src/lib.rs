@@ -19,7 +19,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // Commands registered in later tasks
+            commands::export::open_repo,
+            commands::export::get_unpushed_commits,
+            commands::export::get_last_sync,
+            commands::export::preview_export,
+            commands::export::exec_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitSneaker");
