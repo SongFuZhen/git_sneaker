@@ -21,6 +21,14 @@ const TRAILER_KEYS: &[&str] = &[
     "cc:",
 ];
 
+/// Analyze conflicts and attempt auto-resolution.
+///
+/// # Hunk ID contract
+///
+/// This assigns **global** hunk IDs across all files. Before passing resolved hunks
+/// to [`crate::merge::conflict::apply_resolution`], the caller must group them by file
+/// and renumber each group to **per-file** IDs starting from 0, matching the IDs
+/// produced by [`crate::merge::conflict::scan_conflicts`] for that file.
 pub fn analyze(conflicts: &[ConflictFile]) -> AutoResolveReport {
     let mut resolved = Vec::new();
     let mut manual = Vec::new();
@@ -221,6 +229,22 @@ mod tests {
         let h = make_hunk(0, "foo();\n", "", "foo();\n");
         let r = try_resolve(&h, 0).unwrap();
         assert!((r.confidence - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_non_overlapping_local_empty() {
+        let h = make_hunk(0, "", "", "new_fn();\n");
+        let r = try_resolve(&h, 0).unwrap();
+        assert!((r.confidence - 1.0).abs() < 0.01);
+        assert_eq!(r.merged_content, "new_fn();\n");
+    }
+
+    #[test]
+    fn test_non_overlapping_remote_empty() {
+        let h = make_hunk(0, "new_fn();\n", "", "");
+        let r = try_resolve(&h, 0).unwrap();
+        assert!((r.confidence - 1.0).abs() < 0.01);
+        assert_eq!(r.merged_content, "new_fn();\n");
     }
 
     #[test]
