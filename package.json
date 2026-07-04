@@ -1,0 +1,9 @@
+{
+  "name": "git-sneaker",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Git bundle tool with GUI",
+  "scripts": {
+    "tauri": "tauri"
+  }
+}
