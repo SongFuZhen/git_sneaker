@@ -25,23 +25,21 @@ const TRAILER_KEYS: &[&str] = &[
 ///
 /// # Hunk ID contract
 ///
-/// This assigns **global** hunk IDs across all files. Before passing resolved hunks
-/// to [`crate::merge::conflict::apply_resolution`], the caller must group them by file
-/// and renumber each group to **per-file** IDs starting from 0, matching the IDs
-/// produced by [`crate::merge::conflict::scan_conflicts`] for that file.
+/// This assigns **per-file** hunk IDs starting from 0 for each file,
+/// matching the IDs produced by [`crate::merge::conflict::scan_conflicts`].
+/// Resolved hunks can be passed directly to [`crate::merge::conflict::apply_resolution`].
 pub fn analyze(conflicts: &[ConflictFile]) -> AutoResolveReport {
     let mut resolved = Vec::new();
     let mut manual = Vec::new();
-    let mut hunk_id = 0;
 
     for file in conflicts {
         for hunk in &file.hunks {
-            let result = try_resolve(hunk, hunk_id);
+            // Use the hunk's own ID (per-file, starting from 0)
+            let result = try_resolve(hunk, hunk.id);
             match result {
                 Some(r) => resolved.push(r),
-                None => manual.push(hunk_id),
+                None => manual.push(hunk.id),
             }
-            hunk_id += 1;
         }
     }
 
@@ -193,16 +191,22 @@ fn strip_trailers(s: &str) -> String {
 fn merge_trailers(local: &str, remote: &str) -> String {
     let body = strip_trailers(local);
     let mut result = body;
-    if !result.is_empty() {
-        result.push('\n');
-    }
     let mut seen = HashSet::new();
+    let mut has_trailers = false;
+
     for line in local.lines().chain(remote.lines()) {
         let trimmed = line.trim();
         if is_trailer_key(trimmed) {
             let key = trimmed.to_lowercase();
             if seen.insert(key) {
-                result.push_str(line);
+                if !has_trailers {
+                    // Ensure newline between body and first trailer
+                    if !result.is_empty() && !result.ends_with('\n') {
+                        result.push('\n');
+                    }
+                    has_trailers = true;
+                }
+                result.push_str(trimmed);
                 result.push('\n');
             }
         }

@@ -64,27 +64,60 @@ pub fn verify(bundle_path: &Path) -> Result<BundleInfo, SneakerError> {
         return Err(SneakerError::BundleVerifyFailed(stderr.to_string()));
     }
 
-    // Get head commit from list-heads
+    // Get head commit and refs from list-heads
     let heads_output = ShellCommand::new("git")
         .args(["bundle", "list-heads", &bundle_path.display().to_string()])
         .output()
         .map_err(|e| SneakerError::BundleVerifyFailed(e.to_string()))?;
 
     let heads_stdout = String::from_utf8_lossy(&heads_output.stdout);
-    let head_commit = heads_stdout
-        .lines()
-        .next()
-        .and_then(|l| l.split_whitespace().next())
-        .map(|s| s[..7.min(s.len())].to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    let mut refs: Vec<(String, String)> = Vec::new();
+
+    for line in heads_stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let hash = parts[0].to_string();
+            let ref_name = parts[1..].join(" ");
+            refs.push((hash, ref_name));
+        }
+    }
+
+    // Find HEAD ref or use first ref
+    let (head_hash, head_ref) = refs
+        .iter()
+        .find(|(_, r)| r == "HEAD" || r.ends_with("/HEAD"))
+        .or_else(|| refs.first())
+        .map(|(h, r)| (h.clone(), r.clone()))
+        .unwrap_or_else(|| ("unknown".to_string(), "HEAD".to_string()));
+
+    let head_commit = head_hash[..7.min(head_hash.len())].to_string();
+
+    // Parse verify output for commit info
+    let verify_stdout = String::from_utf8_lossy(&verify_output.stdout);
+    let mut commits = Vec::new();
+
+    // Extract commit hashes from verify output
+    for line in verify_stdout.lines() {
+        if line.len() >= 40 && line.chars().take(40).all(|c| c.is_ascii_hexdigit()) {
+            let hash = line[..40].to_string();
+            let short = hash[..7.min(hash.len())].to_string();
+            commits.push(crate::engine::commit::Commit {
+                hash: short,
+                full_hash: hash,
+                message: String::new(),
+                author: String::new(),
+                date: 0,
+            });
+        }
+    }
 
     let metadata = std::fs::metadata(bundle_path)
         .map_err(|e| SneakerError::FileNotFound(e.to_string()))?;
 
     Ok(BundleInfo {
         head_commit,
-        head_message: String::new(),
-        commits: Vec::new(),
+        head_message: head_ref,
+        commits,
         file_size: metadata.len(),
     })
 }

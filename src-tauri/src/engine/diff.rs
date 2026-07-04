@@ -5,6 +5,188 @@ use serde::Serialize;
 
 use crate::error::SneakerError;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn init_test_repo(dir: &std::path::Path) {
+        Command::new("git")
+            .args(["init"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+    }
+
+    #[test]
+    fn test_diff_commits_single_file() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        // Create initial commit
+        std::fs::write(dir.path().join("a.txt"), "line1\nline2\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Modify file
+        std::fs::write(dir.path().join("a.txt"), "line1\nmodified\nline3\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "modify a.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let repo = Repository::open(dir.path()).unwrap();
+        let diffs = diff_commits(&repo, "HEAD~1", "HEAD").unwrap();
+
+        assert_eq!(diffs.len(), 1);
+        assert_eq!(diffs[0].path, "a.txt");
+        assert!(!diffs[0].hunks.is_empty());
+    }
+
+    #[test]
+    fn test_diff_commits_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        // Initial commit with one file
+        std::fs::write(dir.path().join("a.txt"), "content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Add new file
+        std::fs::write(dir.path().join("b.txt"), "new content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "add b.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let repo = Repository::open(dir.path()).unwrap();
+        let diffs = diff_commits(&repo, "HEAD~1", "HEAD").unwrap();
+
+        assert_eq!(diffs.len(), 1);
+        assert_eq!(diffs[0].path, "b.txt");
+        assert!(diffs[0].status.contains("Added"));
+    }
+
+    #[test]
+    fn test_diff_commits_no_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("a.txt"), "content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let repo = Repository::open(dir.path()).unwrap();
+        let diffs = diff_commits(&repo, "HEAD", "HEAD").unwrap();
+
+        assert!(diffs.is_empty());
+    }
+
+    #[test]
+    fn test_diff_line_types() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("a.txt"), "keep\nold\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        std::fs::write(dir.path().join("a.txt"), "keep\nnew\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "modify"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let repo = Repository::open(dir.path()).unwrap();
+        let diffs = diff_commits(&repo, "HEAD~1", "HEAD").unwrap();
+
+        assert_eq!(diffs.len(), 1);
+        let hunk = &diffs[0].hunks[0];
+        assert!(!hunk.lines.is_empty());
+
+        // Should have context, deletion, and addition
+        let has_context = hunk.lines.iter().any(|l| matches!(l, DiffLine::Context(_)));
+        let has_deletion = hunk.lines.iter().any(|l| matches!(l, DiffLine::Deletion(_)));
+        let has_addition = hunk.lines.iter().any(|l| matches!(l, DiffLine::Addition(_)));
+
+        assert!(has_context, "should have context lines");
+        assert!(has_deletion, "should have deletion lines");
+        assert!(has_addition, "should have addition lines");
+    }
+
+    #[test]
+    fn test_diff_invalid_ref() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        let repo = Repository::open(dir.path()).unwrap();
+        let result = diff_commits(&repo, "nonexistent", "HEAD");
+
+        assert!(result.is_err());
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct FileDiff {
     pub path: String,

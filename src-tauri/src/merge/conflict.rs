@@ -210,3 +210,285 @@ pub fn commit_merge(repo: &Path, message: &str) -> Result<(), SneakerError> {
         Err(SneakerError::MergeFailed(stderr.to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn init_test_repo(dir: &std::path::Path) {
+        Command::new("git")
+            .args(["init"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+    }
+
+    #[test]
+    fn test_parse_single_conflict() {
+        let content = "line1\n<<<<<<< HEAD\nlocal change\n=======\nremote change\n>>>>>>> branch\nline3\n";
+        let hunks = parse_conflict_markers(content);
+
+        assert_eq!(hunks.len(), 1);
+        assert_eq!(hunks[0].id, 0);
+        assert_eq!(hunks[0].local, "local change");
+        assert_eq!(hunks[0].base, "");
+        assert_eq!(hunks[0].remote, "remote change");
+    }
+
+    #[test]
+    fn test_parse_multiple_conflicts() {
+        let content = "<<<<<<< HEAD\na\n=======\nb\n>>>>>>>\nmiddle\n<<<<<<< HEAD\nc\n=======\nd\n>>>>>>>\n";
+        let hunks = parse_conflict_markers(content);
+
+        assert_eq!(hunks.len(), 2);
+        assert_eq!(hunks[0].id, 0);
+        assert_eq!(hunks[1].id, 1);
+    }
+
+    #[test]
+    fn test_parse_conflict_with_base() {
+        let content = "<<<<<<< HEAD\nnew local\n||||||| base version\nold content\n=======\nnew remote\n>>>>>>>\n";
+        let hunks = parse_conflict_markers(content);
+
+        assert_eq!(hunks.len(), 1);
+        assert_eq!(hunks[0].local, "new local");
+        assert_eq!(hunks[0].base, "old content");
+        assert_eq!(hunks[0].remote, "new remote");
+    }
+
+    #[test]
+    fn test_parse_no_conflict() {
+        let content = "just normal text\nno conflicts here\n";
+        let hunks = parse_conflict_markers(content);
+
+        assert!(hunks.is_empty());
+    }
+
+    #[test]
+    fn test_apply_resolution_take_local() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        // Create initial commit
+        std::fs::write(dir.path().join("conflict.txt"), "base\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Create conflict
+        let conflict_content = "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>>\n";
+        std::fs::write(dir.path().join("conflict.txt"), conflict_content).unwrap();
+        Command::new("git")
+            .args(["add", "conflict.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let resolved = vec![ResolvedHunk {
+            hunk_id: 0,
+            decision: HunkDecision::TakeLocal,
+            merged_content: "local".to_string(),
+            auto: false,
+            confidence: 1.0,
+        }];
+
+        apply_resolution(dir.path(), "conflict.txt", &resolved).unwrap();
+
+        let result = std::fs::read_to_string(dir.path().join("conflict.txt")).unwrap();
+        assert_eq!(result, "local\n");
+    }
+
+    #[test]
+    fn test_apply_resolution_take_remote() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("conflict.txt"), "base\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let conflict_content = "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>>\n";
+        std::fs::write(dir.path().join("conflict.txt"), conflict_content).unwrap();
+        Command::new("git")
+            .args(["add", "conflict.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let resolved = vec![ResolvedHunk {
+            hunk_id: 0,
+            decision: HunkDecision::TakeRemote,
+            merged_content: "remote".to_string(),
+            auto: false,
+            confidence: 1.0,
+        }];
+
+        apply_resolution(dir.path(), "conflict.txt", &resolved).unwrap();
+
+        let result = std::fs::read_to_string(dir.path().join("conflict.txt")).unwrap();
+        assert_eq!(result, "remote\n");
+    }
+
+    #[test]
+    fn test_apply_resolution_custom() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("conflict.txt"), "base\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let conflict_content = "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>>\n";
+        std::fs::write(dir.path().join("conflict.txt"), conflict_content).unwrap();
+        Command::new("git")
+            .args(["add", "conflict.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let resolved = vec![ResolvedHunk {
+            hunk_id: 0,
+            decision: HunkDecision::Custom("custom merge".to_string()),
+            merged_content: "custom merge".to_string(),
+            auto: false,
+            confidence: 1.0,
+        }];
+
+        apply_resolution(dir.path(), "conflict.txt", &resolved).unwrap();
+
+        let result = std::fs::read_to_string(dir.path().join("conflict.txt")).unwrap();
+        assert_eq!(result, "custom merge\n");
+    }
+
+    #[test]
+    fn test_apply_resolution_empty_content() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("conflict.txt"), "base\n").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let conflict_content = "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>>\n";
+        std::fs::write(dir.path().join("conflict.txt"), conflict_content).unwrap();
+        Command::new("git")
+            .args(["add", "conflict.txt"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let resolved = vec![ResolvedHunk {
+            hunk_id: 0,
+            decision: HunkDecision::TakeLocal,
+            merged_content: String::new(),
+            auto: false,
+            confidence: 1.0,
+        }];
+
+        apply_resolution(dir.path(), "conflict.txt", &resolved).unwrap();
+
+        let result = std::fs::read_to_string(dir.path().join("conflict.txt")).unwrap();
+        assert!(result.is_empty() || result == "\n");
+    }
+
+    #[test]
+    fn test_commit_merge() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("a.txt"), "content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        // Make a change and stage it
+        std::fs::write(dir.path().join("a.txt"), "modified").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let result = commit_merge(dir.path(), "test merge commit");
+        assert!(result.is_ok());
+
+        // Verify commit was created
+        let log = Command::new("git")
+            .args(["log", "--oneline", "-1"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        let log_str = String::from_utf8_lossy(&log.stdout);
+        assert!(log_str.contains("test merge commit"));
+    }
+
+    #[test]
+    fn test_commit_merge_no_staged_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        init_test_repo(dir.path());
+
+        std::fs::write(dir.path().join("a.txt"), "content").unwrap();
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+
+        let result = commit_merge(dir.path(), "empty commit");
+        assert!(result.is_err());
+    }
+}
