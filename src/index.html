@@ -93,7 +93,66 @@
                 The bundle has been merged successfully with no conflicts.
             </div>
         </main>
-        <main v-else-if="currentView === 'conflict'" id="conflict-view"></main>
+        <main v-else-if="currentView === 'conflict'">
+            <div v-if="autoReport" class="auto-report">
+                <div class="auto-report-header">Auto-Resolve Report</div>
+                <div>{{ autoReport.summary }}</div>
+                <div v-if="autoReport.manual_hunks.length > 0" class="path-display">
+                    Manual review needed for {{ autoReport.manual_hunks.length }} hunk(s)
+                </div>
+            </div>
+
+            <div class="conflict-file-tabs">
+                <button v-for="(f, i) in conflicts" :key="f.path" @click="selectFile(i)"
+                    :class="['conflict-file-tab', { active: i === selectedFile }, { resolved: isFileResolved(f) }]">
+                    {{ f.path }} ({{ f.hunks.length }} hunks)
+                </button>
+            </div>
+
+            <div v-if="currentFile" class="toolbar">
+                <button class="btn btn-secondary" @click="prevFile" :disabled="selectedFile === 0">Prev File</button>
+                <span>{{ currentFile.path }}</span>
+                <button class="btn btn-secondary" @click="nextFile" :disabled="selectedFile >= conflicts.length - 1">Next File</button>
+                <span class="spacer"></span>
+                <span>Hunk {{ selectedHunk + 1 }}/{{ currentFile.hunks.length }}</span>
+                <button class="btn btn-secondary" @click="prevHunk" :disabled="selectedHunk === 0">Prev</button>
+                <button class="btn btn-secondary" @click="nextHunk" :disabled="selectedHunk >= currentFile.hunks.length - 1">Next</button>
+            </div>
+
+            <div v-if="currentHunk" class="diff-threeway">
+                <div class="diff-panel">
+                    <div class="diff-panel-header">LOCAL (this machine)</div>
+                    <div class="diff-panel-content">{{ currentHunk.local }}</div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">BASE (common ancestor)</div>
+                    <div class="diff-panel-content">{{ currentHunk.base }}</div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header">REMOTE (bundle)</div>
+                    <div class="diff-panel-content">{{ currentHunk.remote }}</div>
+                </div>
+            </div>
+
+            <div class="panel" v-if="currentHunk">
+                <div class="panel-header">Resolution</div>
+                <div class="merge-result" contenteditable="true">{{ currentHunk.local }}</div>
+            </div>
+
+            <div class="toolbar" v-if="currentHunk">
+                <button class="btn btn-primary" @click="takeLocal">Take LOCAL</button>
+                <button class="btn btn-primary" @click="takeRemote">Take REMOTE</button>
+                <button class="btn btn-success" @click="applyCurrentFile">Apply This File</button>
+                <span class="spacer"></span>
+                <button class="btn btn-secondary" @click="doAutoResolve">Auto-Resolve All</button>
+            </div>
+
+            <div class="toolbar">
+                <button class="btn btn-danger" @click="doAbortMerge">Abort Merge</button>
+                <span class="spacer"></span>
+                <button class="btn btn-success" @click="doCommitMerge">Complete Merge</button>
+            </div>
+        </main>
 
         <footer class="status-bar">
             <span>{{ statusText }}</span>
