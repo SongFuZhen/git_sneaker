@@ -75,8 +75,16 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-      - name: Print build artifacts
-        if: always()
+      - name: Print build artifacts (unix)
+        if: always() && runner.os != 'Windows'
         run: |
           echo "=== Build Artifacts ==="
-          find src-tauri/target -name "*.dmg" -o -name "*.app" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.nsis" -o -name "*.msi" 2>/dev/null || echo "No artifacts found"
+          find src-tauri/target \( -name "*.dmg" -o -name "*.app" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.nsis" -o -name "*.msi" \) 2>/dev/null || echo "No artifacts found"
+
+      - name: Print build artifacts (windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          echo "=== Build Artifacts ==="
+          Get-ChildItem -Path src-tauri/target -Recurse -Include *.dmg,*.app,*.AppImage,*.deb,*.nsis,*.msi -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+          if (-not $?) { echo "No artifacts found" }
