@@ -17,7 +17,49 @@
             </nav>
         </header>
 
-        <main v-if="currentView === 'export'" id="export-view"></main>
+        <main v-if="currentView === 'export'">
+            <div class="panel">
+                <div class="panel-header">Repository</div>
+                <div class="toolbar">
+                    <input type="text" :value="repoPath" readonly placeholder="Select a git repository...">
+                    <button class="btn btn-secondary" @click="selectRepo">Browse...</button>
+                </div>
+                <div v-if="repoInfo" class="path-display">
+                    Branch: {{ repoInfo.head_branch }} | HEAD: {{ repoInfo.head_commit }}
+                    <span v-if="repoInfo.last_sync"> | Last sync: {{ repoInfo.last_sync.tag_name }}</span>
+                    <span v-else> | No previous sync</span>
+                </div>
+            </div>
+
+            <div class="panel" v-if="exportPreview">
+                <div class="panel-header">Pending Commits ({{ exportPreview.commits.length }})</div>
+                <div class="commit-list">
+                    <div v-for="c in exportPreview.commits" class="commit-item">
+                        <span class="commit-hash">{{ c.hash }}</span>
+                        <span class="commit-msg">{{ c.message }}</span>
+                        <span class="commit-author">{{ c.author }}</span>
+                    </div>
+                </div>
+                <div v-if="exportPreview.commits.length === 0" class="path-display">No new commits since last sync.</div>
+            </div>
+
+            <div class="toolbar" v-if="repoPath">
+                <button class="btn btn-primary" @click="doPreviewExport" :disabled="exportState === 'loading'">
+                    {{ exportState === 'loading' ? 'Scanning...' : 'Preview' }}
+                </button>
+                <button class="btn btn-success" @click="doExecExport" :disabled="!exportPreview || exportState === 'exporting'">
+                    Export to Repo
+                </button>
+                <button class="btn btn-secondary" @click="doSelectExportOutput" :disabled="!exportPreview || exportState === 'exporting'">
+                    Export to USB...
+                </button>
+            </div>
+
+            <div v-if="exportState === 'done'" class="auto-report">
+                <div class="auto-report-header">Export Complete</div>
+                Copy the bundle file to your USB drive and transfer to the target machine.
+            </div>
+        </main>
         <main v-else-if="currentView === 'import'" id="import-view"></main>
         <main v-else-if="currentView === 'conflict'" id="conflict-view"></main>
 
