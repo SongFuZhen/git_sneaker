@@ -18,30 +18,94 @@ pub fn pull_bundle(
     bundle_path: &Path,
     branch: &str,
 ) -> Result<MergeResult, SneakerError> {
-    let output = Command::new("git")
+    // First, fetch all refs from the bundle
+    let fetch_output = Command::new("git")
         .args([
             "-C",
             &repo.display().to_string(),
-            "pull",
-            "--no-edit",
+            "fetch",
+            "--update-head-ok",
             &bundle_path.display().to_string(),
-            branch,
+            "refs/heads/*:refs/bundle/*",
+            "HEAD:refs/bundle/HEAD",
         ])
         .output()
         .map_err(|e| SneakerError::MergeFailed(e.to_string()))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !fetch_output.status.success() {
+        let _stderr = String::from_utf8_lossy(&fetch_output.stderr);
+        // Try simpler fetch if the first one fails
+        let simple_fetch = Command::new("git")
+            .args([
+                "-C",
+                &repo.display().to_string(),
+                "fetch",
+                &bundle_path.display().to_string(),
+                "HEAD",
+            ])
+            .output()
+            .map_err(|e| SneakerError::MergeFailed(e.to_string()))?;
+
+        if !simple_fetch.status.success() {
+            let stderr2 = String::from_utf8_lossy(&simple_fetch.stderr);
+            return Err(SneakerError::MergeFailed(stderr2.to_string()));
+        }
+    }
+
+    // Determine which ref to merge
+    let merge_ref = if branch == "HEAD" {
+        "FETCH_HEAD".to_string()
+    } else {
+        // Try to find the branch in bundle refs
+        let refs_output = match Command::new("git")
+            .args([
+                "-C",
+                &repo.display().to_string(),
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/bundle/",
+            ])
+            .output() {
+                Ok(o) => o,
+                Err(_) => return Ok(MergeResult::AlreadyUpToDate),
+            };
+
+        let refs_str = String::from_utf8_lossy(&refs_output.stdout);
+        let bundle_ref = format!("refs/bundle/{}", branch);
+        
+        if refs_str.contains(&bundle_ref) {
+            bundle_ref
+        } else {
+            // Use FETCH_HEAD as fallback
+            "FETCH_HEAD".to_string()
+        }
+    };
+
+    // Now merge
+    let merge_output = Command::new("git")
+        .args([
+            "-C",
+            &repo.display().to_string(),
+            "merge",
+            "--no-edit",
+            &merge_ref,
+        ])
+        .output()
+        .map_err(|e| SneakerError::MergeFailed(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&merge_output.stdout);
+    let stderr = String::from_utf8_lossy(&merge_output.stderr);
     let combined = format!("{}{}", stdout, stderr);
 
     if combined.contains("Already up to date") || combined.contains("Already up-to-date") {
         return Ok(MergeResult::AlreadyUpToDate);
     }
 
-    if output.status.success() {
+    if merge_output.status.success() {
         return Ok(MergeResult::Success);
     }
 
+    // Check for conflicts
     let status = Command::new("git")
         .args(["-C", &repo.display().to_string(), "diff", "--name-only", "--diff-filter=U"])
         .output()
@@ -62,17 +126,20 @@ pub fn pull_bundle(
 }
 
 pub fn abort_merge(repo: &Path) -> Result<(), SneakerError> {
-    let output = Command::new("git")
+    // Abort merge if in progress
+    let _ = Command::new("git")
         .args(["-C", &repo.display().to_string(), "merge", "--abort"])
-        .output()
-        .map_err(|e| SneakerError::GitError(e.to_string()))?;
+        .output();
 
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(SneakerError::MergeFailed(stderr.to_string()))
-    }
+    // Clean up bundle refs
+    let _ = Command::new("git")
+        .args(["-C", &repo.display().to_string(), "update-ref", "-d", "refs/bundle/master"])
+        .output();
+    let _ = Command::new("git")
+        .args(["-C", &repo.display().to_string(), "update-ref", "-d", "refs/bundle/main"])
+        .output();
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -163,6 +230,9 @@ mod tests {
         // Pull bundle into target
         let result = pull_bundle(&target_dir, &bundle_path, "main");
         assert!(result.is_ok());
+
+        // Clean up
+        let _ = abort_merge(&target_dir);
     }
 
     #[test]

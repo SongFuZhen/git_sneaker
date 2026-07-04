@@ -187,6 +187,7 @@ mod tests {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub struct FileDiff {
     pub path: String,
@@ -194,6 +195,7 @@ pub struct FileDiff {
     pub hunks: Vec<Hunk>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 pub struct Hunk {
     pub old_start: u32,
@@ -204,6 +206,7 @@ pub struct Hunk {
     pub lines: Vec<DiffLine>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "content")]
 pub enum DiffLine {
@@ -212,6 +215,7 @@ pub enum DiffLine {
     Deletion(String),
 }
 
+#[allow(dead_code)]
 pub fn diff_commits(
     repo: &Repository,
     from: &str,

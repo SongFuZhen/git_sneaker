@@ -6,10 +6,11 @@
   "build": {
     "frontendDist": "../src",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "python3 -m http.server 1420 --directory ../src",
+    "beforeDevCommand": "live-server src --port=1420 --no-browser",
     "beforeBuildCommand": ""
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "GitSneaker",

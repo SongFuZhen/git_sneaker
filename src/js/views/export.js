@@ -1,39 +1,63 @@
 const exportView = {
-    async doPreviewExport() {
-        if (!this.repoPath) { this.showError('Select a repository first'); return; }
-        this.exportState = 'loading';
-        this.setStatus('Scanning commits...');
+    allCommits: [],
+    selectedStartCommit: null,
+    commitLimit: 50,
+    exportMode: 'full',
+
+    async loadCommits() {
+        if (!this.repoPath) return;
+        this.setStatus(t('scanningCommits'));
         try {
-            this.exportPreview = await api.previewExport(this.repoPath);
-            this.exportState = 'idle';
-            this.setStatus(`${this.exportPreview.commits.length} commits to sync`);
-        } catch (e) { this.showError(e); this.exportState = 'error'; }
+            this.allCommits = await api.listCommits(this.repoPath, this.commitLimit);
+            this.setStatus(t('ready'));
+        } catch (e) { this.showError(e); }
     },
 
-    async doExecExport() {
-        if (!this.repoPath || !this.exportPreview) return;
-        this.exportState = 'exporting';
-        this.setStatus('Creating bundle...');
+    async loadMoreCommits() {
+        if (!this.repoPath) return;
+        this.commitLimit += 50;
+        await this.loadCommits();
+    },
+
+    selectStartCommit(commit) {
+        this.selectedStartCommit = commit;
+    },
+
+    async doFullExport() {
+        if (!this.repoPath) return;
         try {
-            const result = await api.execExport(this.repoPath, this.repoPath);
-            this.exportState = 'done';
-            this.setStatus(`Bundle: ${result.file_path} (${(result.file_size / 1024).toFixed(1)} KB)`);
-            this.repoInfo = await api.openRepo(this.repoPath);
+            const selected = await window.__TAURI__.dialog.open({
+                directory: true,
+                title: t('selectOutputDir'),
+            });
+            if (selected) {
+                this.exportState = 'exporting';
+                this.exportMode = 'full';
+                this.setStatus(t('creatingBundle'));
+                const result = await api.execExport(this.repoPath, selected, null);
+                this.exportState = 'done';
+                this.setStatus(`${t('bundleSaved')}: ${result.file_path}`);
+                this.repoInfo = await api.openRepo(this.repoPath);
+            }
         } catch (e) { this.showError(e); this.exportState = 'error'; }
     },
 
     async doSelectExportOutput() {
+        if (!this.repoPath) return;
         try {
             const selected = await window.__TAURI__.dialog.open({
                 directory: true,
-                title: 'Select Output Directory (e.g., USB drive)',
+                title: t('selectOutputDir'),
             });
-            if (selected && this.repoPath && this.exportPreview) {
+            if (selected) {
                 this.exportState = 'exporting';
-                this.setStatus('Creating bundle...');
-                const result = await api.execExport(this.repoPath, selected);
+                this.setStatus(t('creatingBundle'));
+                const from = this.exportMode === 'incremental' && this.selectedStartCommit
+                    ? this.selectedStartCommit.full_hash
+                    : null;
+                const result = await api.execExport(this.repoPath, selected, from);
                 this.exportState = 'done';
-                this.setStatus(`Bundle saved: ${result.file_path}`);
+                this.setStatus(`${t('bundleSaved')}: ${result.file_path}`);
                 this.repoInfo = await api.openRepo(this.repoPath);
             }
         } catch (e) { this.showError(e); this.exportState = 'error'; }

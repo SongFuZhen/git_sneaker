@@ -49,19 +49,57 @@ pub fn create(repo: &Path, range: &str, output: &Path) -> Result<ExportResult, S
     })
 }
 
-pub fn verify(bundle_path: &Path) -> Result<BundleInfo, SneakerError> {
-    if !bundle_path.exists() {
-        return Err(SneakerError::FileNotFound(bundle_path.display().to_string()));
-    }
-
-    let verify_output = ShellCommand::new("git")
-        .args(["bundle", "verify", &bundle_path.display().to_string()])
+pub fn get_branch_name(bundle_path: &Path) -> Result<String, SneakerError> {
+    let output = ShellCommand::new("git")
+        .args(["bundle", "list-heads", &bundle_path.display().to_string()])
         .output()
         .map_err(|e| SneakerError::BundleVerifyFailed(e.to_string()))?;
 
-    if !verify_output.status.success() {
-        let stderr = String::from_utf8_lossy(&verify_output.stderr);
-        return Err(SneakerError::BundleVerifyFailed(stderr.to_string()));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut refs = Vec::new();
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let ref_name = parts[1].to_string();
+            refs.push(ref_name);
+        }
+    }
+
+    // Find branch ref (refs/heads/xxx)
+    for ref_name in &refs {
+        if let Some(branch) = ref_name.strip_prefix("refs/heads/") {
+            return Ok(branch.to_string());
+        }
+    }
+
+    // Try to find HEAD
+    for ref_name in &refs {
+        if ref_name == "HEAD" {
+            // HEAD exists, try to find what it points to
+            continue;
+        }
+    }
+
+    // If only one ref, use it
+    if refs.len() == 1 {
+        let ref_name = &refs[0];
+        if ref_name == "HEAD" {
+            return Ok("HEAD".to_string());
+        }
+        if let Some(branch) = ref_name.strip_prefix("refs/heads/") {
+            return Ok(branch.to_string());
+        }
+        return Ok(ref_name.clone());
+    }
+
+    // Default to HEAD
+    Ok("HEAD".to_string())
+}
+
+pub fn verify(bundle_path: &Path, _repo_path: Option<&Path>) -> Result<BundleInfo, SneakerError> {
+    if !bundle_path.exists() {
+        return Err(SneakerError::FileNotFound(bundle_path.display().to_string()));
     }
 
     // Get head commit and refs from list-heads
@@ -69,6 +107,11 @@ pub fn verify(bundle_path: &Path) -> Result<BundleInfo, SneakerError> {
         .args(["bundle", "list-heads", &bundle_path.display().to_string()])
         .output()
         .map_err(|e| SneakerError::BundleVerifyFailed(e.to_string()))?;
+
+    if !heads_output.status.success() {
+        let stderr = String::from_utf8_lossy(&heads_output.stderr);
+        return Err(SneakerError::BundleVerifyFailed(stderr.to_string()));
+    }
 
     let heads_stdout = String::from_utf8_lossy(&heads_output.stdout);
     let mut refs: Vec<(String, String)> = Vec::new();
@@ -92,32 +135,13 @@ pub fn verify(bundle_path: &Path) -> Result<BundleInfo, SneakerError> {
 
     let head_commit = head_hash[..7.min(head_hash.len())].to_string();
 
-    // Parse verify output for commit info
-    let verify_stdout = String::from_utf8_lossy(&verify_output.stdout);
-    let mut commits = Vec::new();
-
-    // Extract commit hashes from verify output
-    for line in verify_stdout.lines() {
-        if line.len() >= 40 && line.chars().take(40).all(|c| c.is_ascii_hexdigit()) {
-            let hash = line[..40].to_string();
-            let short = hash[..7.min(hash.len())].to_string();
-            commits.push(crate::engine::commit::Commit {
-                hash: short,
-                full_hash: hash,
-                message: String::new(),
-                author: String::new(),
-                date: 0,
-            });
-        }
-    }
-
     let metadata = std::fs::metadata(bundle_path)
         .map_err(|e| SneakerError::FileNotFound(e.to_string()))?;
 
     Ok(BundleInfo {
         head_commit,
         head_message: head_ref,
-        commits,
+        commits: Vec::new(),
         file_size: metadata.len(),
     })
 }

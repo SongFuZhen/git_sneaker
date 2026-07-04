@@ -10,6 +10,65 @@ pub struct Commit {
     pub message: String,
     pub author: String,
     pub date: i64,
+    pub date_str: String,
+}
+
+fn format_date(timestamp: i64) -> String {
+    let dt = chrono::DateTime::from_timestamp(timestamp, 0)
+        .unwrap_or_default();
+    dt.format("%Y-%m-%d %H:%M").to_string()
+}
+
+fn make_commit(commit: &git2::Commit) -> Result<Commit, SneakerError> {
+    let oid = commit.id();
+    let short = commit
+        .as_object()
+        .short_id()
+        .map_err(|e| SneakerError::from(e))?;
+    let short_str = short
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
+
+    let message = commit
+        .message()
+        .unwrap_or("")
+        .lines()
+        .next()
+        .unwrap_or("")
+        .to_string();
+
+    let author = commit.author();
+    let author_name = author.name().unwrap_or("unknown").to_string();
+    let timestamp = commit.time().seconds();
+
+    Ok(Commit {
+        hash: short_str,
+        full_hash: oid.to_string(),
+        message,
+        author: author_name,
+        date: timestamp,
+        date_str: format_date(timestamp),
+    })
+}
+
+pub fn list_all(repo: &Repository, limit: usize) -> Result<Vec<Commit>, SneakerError> {
+    let mut revwalk = repo.revwalk().map_err(|e| SneakerError::from(e))?;
+    revwalk.set_sorting(Sort::TIME).map_err(|e| SneakerError::from(e))?;
+    revwalk.push_head().map_err(|e| SneakerError::from(e))?;
+
+    let mut commits = Vec::new();
+
+    for (i, oid_result) in revwalk.enumerate() {
+        if i >= limit {
+            break;
+        }
+        let oid = oid_result.map_err(|e| SneakerError::from(e))?;
+        let commit = repo.find_commit(oid).map_err(|e| SneakerError::from(e))?;
+        commits.push(make_commit(&commit)?);
+    }
+
+    Ok(commits)
 }
 
 pub fn list_range(
@@ -30,34 +89,7 @@ pub fn list_range(
     for oid_result in revwalk {
         let oid = oid_result.map_err(|e| SneakerError::from(e))?;
         let commit = repo.find_commit(oid).map_err(|e| SneakerError::from(e))?;
-
-        let short = commit
-            .as_object()
-            .short_id()
-            .map_err(|e| SneakerError::from(e))?;
-        let short_str = short
-            .as_str()
-            .unwrap_or("unknown")
-            .to_string();
-
-        let message = commit
-            .message()
-            .unwrap_or("")
-            .lines()
-            .next()
-            .unwrap_or("")
-            .to_string();
-
-        let author = commit.author();
-        let author_name = author.name().unwrap_or("unknown").to_string();
-
-        commits.push(Commit {
-            hash: short_str,
-            full_hash: oid.to_string(),
-            message,
-            author: author_name,
-            date: commit.time().seconds(),
-        });
+        commits.push(make_commit(&commit)?);
     }
 
     Ok(commits)

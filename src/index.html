@@ -11,94 +11,100 @@
         <header class="app-header">
             <h1 class="app-title">GitSneaker</h1>
             <nav class="nav-tabs">
-                <button @click="currentView = 'export'" :class="{ active: currentView === 'export' }">Export</button>
-                <button @click="currentView = 'import'" :class="{ active: currentView === 'import' }">Import</button>
-                <button v-if="currentView === 'conflict'" class="active">Conflict</button>
+                <button @click="currentView = 'export'" :class="{ active: currentView === 'export' }">{{ t('export') }}</button>
+                <button @click="currentView = 'import'" :class="{ active: currentView === 'import' }">{{ t('import') }}</button>
+                <button v-if="currentView === 'conflict'" class="active">{{ t('conflict') }}</button>
             </nav>
         </header>
 
         <main v-if="currentView === 'export'">
             <div class="panel">
-                <div class="panel-header">Repository</div>
+                <div class="panel-header">{{ t('repository') }}</div>
                 <div class="toolbar">
-                    <input type="text" :value="repoPath" readonly placeholder="Select a git repository...">
-                    <button class="btn btn-secondary" @click="selectRepo">Browse...</button>
+                    <input type="text" :value="repoPath" readonly :placeholder="t('selectGitRepo') + '...'">
+                    <button class="btn btn-secondary" @click="selectRepo">{{ t('browse') }}</button>
+                    <div class="divider"></div>
+                    <button class="btn btn-danger" @click="doFullExport" :disabled="exportState === 'exporting'">{{ t('exportFull') }}</button>
                 </div>
                 <div v-if="repoInfo" class="path-display">
-                    Branch: {{ repoInfo.head_branch }} | HEAD: {{ repoInfo.head_commit }}
-                    <span v-if="repoInfo.last_sync"> | Last sync: {{ repoInfo.last_sync.tag_name }}</span>
-                    <span v-else> | No previous sync</span>
+                    {{ t('branchLabel', { branch: repoInfo.head_branch, head: repoInfo.head_commit }) }}
+                    <span v-if="repoInfo.last_sync"> | {{ t('branch') }}: {{ repoInfo.last_sync.tag_name }}</span>
+                    <span v-else> | {{ t('noPreviousSync') }}</span>
                 </div>
             </div>
 
-            <div class="panel" v-if="exportPreview">
-                <div class="panel-header">Pending Commits ({{ exportPreview.commits.length }})</div>
+            <div class="panel flex-expand" v-if="repoPath && allCommits.length > 0">
+                <div class="panel-header-row">
+                    <span class="panel-header">{{ t('commitHistory') }} ({{ allCommits.length }})</span>
+                    <span class="commit-hint-inline">{{ t('selectCommitHint') }}</span>
+                    <span class="spacer"></span>
+                    <button class="btn btn-success btn-sm" @click="doSelectExportOutput"
+                        :disabled="exportState === 'exporting'">
+                        {{ exportState === 'exporting' ? t('creatingBundle') : t('exportBtn') }}
+                    </button>
+                </div>
                 <div class="commit-list">
-                    <div v-for="c in exportPreview.commits" class="commit-item">
+                    <label v-for="c in allCommits" :key="c.full_hash"
+                        class="commit-item selectable"
+                        :class="{ selected: selectedStartCommit && selectedStartCommit.full_hash === c.full_hash }"
+                        @click="selectStartCommit(c)">
+                        <input type="radio" name="startCommit" class="commit-radio"
+                            :checked="selectedStartCommit && selectedStartCommit.full_hash === c.full_hash">
                         <span class="commit-hash">{{ c.hash }}</span>
+                        <span class="commit-date">{{ c.date_str }}</span>
                         <span class="commit-msg">{{ c.message }}</span>
                         <span class="commit-author">{{ c.author }}</span>
-                    </div>
+                    </label>
                 </div>
-                <div v-if="exportPreview.commits.length === 0" class="path-display">No new commits since last sync.</div>
-            </div>
-
-            <div class="toolbar" v-if="repoPath">
-                <button class="btn btn-primary" @click="doPreviewExport" :disabled="exportState === 'loading'">
-                    {{ exportState === 'loading' ? 'Scanning...' : 'Preview' }}
-                </button>
-                <button class="btn btn-success" @click="doExecExport" :disabled="!exportPreview || exportState === 'exporting'">
-                    Export to Repo
-                </button>
-                <button class="btn btn-secondary" @click="doSelectExportOutput" :disabled="!exportPreview || exportState === 'exporting'">
-                    Export to USB...
-                </button>
+                <div class="load-more-wrapper" v-if="allCommits.length >= commitLimit">
+                    <button class="btn btn-secondary btn-load-more" @click="loadMoreCommits">
+                        {{ t('loadMore') }}
+                    </button>
+                </div>
             </div>
 
             <div v-if="exportState === 'done'" class="auto-report">
-                <div class="auto-report-header">Export Complete</div>
-                Copy the bundle file to your USB drive and transfer to the target machine.
+                <div class="auto-report-header">{{ t('exportComplete') }}</div>
+                {{ t('exportCompleteTip') }}
             </div>
         </main>
         <main v-else-if="currentView === 'import'">
             <div class="panel">
-                <div class="panel-header">Target Repository</div>
+                <div class="panel-header">{{ t('targetRepository') }}</div>
                 <div class="toolbar">
-                    <input type="text" :value="repoPath" readonly placeholder="Select target repository...">
-                    <button class="btn btn-secondary" @click="selectRepo">Browse...</button>
+                    <input type="text" :value="repoPath" readonly :placeholder="t('selectGitRepo') + '...'">
+                    <button class="btn btn-secondary" @click="selectRepo">{{ t('browse') }}</button>
                 </div>
                 <div v-if="repoInfo" class="path-display">
-                    Branch: {{ repoInfo.head_branch }} | HEAD: {{ repoInfo.head_commit }}
+                    {{ t('branchLabel', { branch: repoInfo.head_branch, head: repoInfo.head_commit }) }}
                 </div>
             </div>
 
             <div class="panel">
-                <div class="panel-header">Bundle File</div>
+                <div class="panel-header">{{ t('bundleFile') }}</div>
                 <div class="toolbar">
-                    <input type="text" :value="bundlePath" readonly placeholder="Select a .bundle file...">
-                    <button class="btn btn-secondary" @click="selectBundleFile">Browse...</button>
-                </div>
-                <div v-if="bundleInfo" class="path-display">
-                    Bundle HEAD: {{ bundleInfo.head_commit }} | Size: {{ (bundleInfo.file_size / 1024).toFixed(1) }} KB
+                    <input type="text" :value="bundlePath" readonly :placeholder="t('selectBundleFile') + '...'">
+                    <button class="btn btn-secondary" @click="selectBundleFile">{{ t('browse') }}</button>
                 </div>
             </div>
 
             <div class="toolbar" v-if="repoPath && bundlePath">
-                <button class="btn btn-primary" @click="doVerifyBundle" :disabled="importState === 'verifying'">Verify Bundle</button>
-                <button class="btn btn-success" @click="doExecImport" :disabled="importState === 'importing' || !bundleInfo">Import</button>
+                <button class="btn btn-success" @click="doExecImport" :disabled="importState === 'importing'">
+                    {{ importState === 'importing' ? t('importingBundle') : t('importBtn') }}
+                </button>
             </div>
 
             <div v-if="importState === 'done'" class="auto-report">
-                <div class="auto-report-header">Import Complete</div>
-                The bundle has been merged successfully with no conflicts.
+                <div class="auto-report-header">{{ t('importComplete') }}</div>
+                {{ t('importCompleteTip') }}
             </div>
         </main>
         <main v-else-if="currentView === 'conflict'">
             <div v-if="autoReport" class="auto-report">
-                <div class="auto-report-header">Auto-Resolve Report</div>
+                <div class="auto-report-header">{{ t('autoResolveReport') }}</div>
                 <div>{{ autoReport.summary }}</div>
                 <div v-if="autoReport.manual_hunks.length > 0" class="path-display">
-                    Manual review needed for {{ autoReport.manual_hunks.length }} hunk(s)
+                    {{ t('resolveHunksFirst') }} {{ autoReport.manual_hunks.length }} hunk(s)
                 </div>
             </div>
 
@@ -110,9 +116,9 @@
             </div>
 
             <div v-if="currentFile" class="toolbar">
-                <button class="btn btn-secondary" @click="prevFile" :disabled="selectedFile === 0">Prev File</button>
+                <button class="btn btn-secondary" @click="prevFile" :disabled="selectedFile === 0">Prev</button>
                 <span>{{ currentFile.path }}</span>
-                <button class="btn btn-secondary" @click="nextFile" :disabled="selectedFile >= conflicts.length - 1">Next File</button>
+                <button class="btn btn-secondary" @click="nextFile" :disabled="selectedFile >= conflicts.length - 1">Next</button>
                 <span class="spacer"></span>
                 <span>Hunk {{ selectedHunk + 1 }}/{{ currentFile.hunks.length }}</span>
                 <button class="btn btn-secondary" @click="prevHunk" :disabled="selectedHunk === 0">Prev</button>
@@ -121,36 +127,36 @@
 
             <div v-if="currentHunk" class="diff-threeway">
                 <div class="diff-panel">
-                    <div class="diff-panel-header">LOCAL (this machine)</div>
+                    <div class="diff-panel-header">LOCAL (本地)</div>
                     <div class="diff-panel-content">{{ currentHunk.local }}</div>
                 </div>
                 <div class="diff-panel">
-                    <div class="diff-panel-header">BASE (common ancestor)</div>
+                    <div class="diff-panel-header">BASE (共同祖先)</div>
                     <div class="diff-panel-content">{{ currentHunk.base }}</div>
                 </div>
                 <div class="diff-panel">
-                    <div class="diff-panel-header">REMOTE (bundle)</div>
+                    <div class="diff-panel-header">REMOTE (远程)</div>
                     <div class="diff-panel-content">{{ currentHunk.remote }}</div>
                 </div>
             </div>
 
             <div class="panel" v-if="currentHunk">
-                <div class="panel-header">Resolution</div>
+                <div class="panel-header">Resolution (解决方案)</div>
                 <div class="merge-result" contenteditable="true">{{ currentHunk.local }}</div>
             </div>
 
             <div class="toolbar" v-if="currentHunk">
-                <button class="btn btn-primary" @click="takeLocal">Take LOCAL</button>
-                <button class="btn btn-primary" @click="takeRemote">Take REMOTE</button>
-                <button class="btn btn-success" @click="applyCurrentFile">Apply This File</button>
+                <button class="btn btn-primary" @click="takeLocal">{{ t('takeLocal') }}</button>
+                <button class="btn btn-primary" @click="takeRemote">{{ t('takeRemote') }}</button>
+                <button class="btn btn-success" @click="applyCurrentFile">{{ t('applyThisFile') }}</button>
                 <span class="spacer"></span>
-                <button class="btn btn-secondary" @click="doAutoResolve">Auto-Resolve All</button>
+                <button class="btn btn-secondary" @click="doAutoResolve">{{ t('autoResolveAll') }}</button>
             </div>
 
             <div class="toolbar">
-                <button class="btn btn-danger" @click="doAbortMerge">Abort Merge</button>
+                <button class="btn btn-danger" @click="doAbortMerge">{{ t('abortMerge') }}</button>
                 <span class="spacer"></span>
-                <button class="btn btn-success" @click="doCommitMerge">Complete Merge</button>
+                <button class="btn btn-success" @click="doCommitMerge">{{ t('completeMerge') }}</button>
             </div>
         </main>
 
@@ -160,6 +166,7 @@
     </div>
 
     <script src="js/vendor/petite-vue.js"></script>
+    <script src="js/i18n.js"></script>
     <script src="js/api.js"></script>
     <script src="js/app.js"></script>
     <script src="js/views/export.js"></script>
@@ -168,21 +175,22 @@
     <script>
         PetiteVue.createApp({
             currentView: 'export',
-            statusText: 'Ready',
+            statusText: t('ready'),
             repoPath: '',
             repoInfo: null,
-            exportPreview: null,
             exportState: 'idle',
             bundlePath: '',
-            bundleInfo: null,
             importState: 'idle',
             conflicts: [],
             selectedFile: 0,
             selectedHunk: 0,
             autoReport: null,
             resolvedDecisions: {},
+            allCommits: [],
+            selectedStartCommit: null,
+            commitLimit: 50,
+            exportMode: 'full',
 
-            // Mixins
             ...app,
             ...exportView,
             ...importView,

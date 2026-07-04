@@ -1,6 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
+#[allow(dead_code)]
 #[derive(Debug, Error, Serialize)]
 pub enum SneakerError {
     #[error("Repository not found: {0}")]

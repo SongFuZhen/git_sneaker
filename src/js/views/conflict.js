@@ -30,7 +30,7 @@ const conflictView = {
 
     async doAutoResolve() {
         if (!this.repoPath || !this.conflicts) return;
-        this.setStatus('Analyzing conflicts...');
+        this.setStatus(t('analyzingConflicts'));
         try {
             this.autoReport = await api.autoResolve(this.repoPath, this.conflicts);
             this.setStatus(this.autoReport.summary);
@@ -73,26 +73,26 @@ const conflictView = {
         if (!this.currentFile) return;
         const decisions = this.resolvedDecisions[this.currentFile.path];
         if (!decisions || decisions.length !== this.currentFile.hunks.length) {
-            this.showError('Resolve all hunks in this file first');
+            this.showError(t('resolveHunksFirst'));
             return;
         }
-        this.setStatus('Applying resolution...');
+        this.setStatus(t('applyingResolution'));
         try {
             await api.applyResolution(this.repoPath, this.currentFile.path, decisions);
-            this.setStatus(`Applied: ${this.currentFile.path}`);
+            this.setStatus(`${t('applied')}: ${this.currentFile.path}`);
             const allResolved = this.conflicts.every(f => {
                 const d = this.resolvedDecisions[f.path];
                 return d && d.length === f.hunks.length;
             });
-            if (allResolved) this.setStatus('All conflicts resolved. Ready to commit.');
+            if (allResolved) this.setStatus(t('allResolved'));
         } catch (e) { this.showError(e); }
     },
 
     async doCommitMerge() {
-        this.setStatus('Committing merge...');
+        this.setStatus(t('committingMerge'));
         try {
             await api.commitMerge(this.repoPath, 'Merge from GitSneaker bundle');
-            this.setStatus('Merge committed successfully');
+            this.setStatus(t('mergeCommitted'));
             this.currentView = 'export';
             this.repoInfo = await api.openRepo(this.repoPath);
         } catch (e) { this.showError(e); }
@@ -101,7 +101,7 @@ const conflictView = {
     async doAbortMerge() {
         try {
             await api.abortMerge(this.repoPath);
-            this.setStatus('Merge aborted');
+            this.setStatus(t('mergeAborted'));
             this.currentView = 'export';
             this.conflicts = [];
             this.resolvedDecisions = {};
