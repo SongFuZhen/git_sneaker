@@ -6,6 +6,20 @@
 
 ---
 
+## 🎯 适用场景
+
+**军工单位 · 涉密内网 · 物理隔离 · 单向导入**
+
+- 🛡️ **物理隔离网络**：无需联网，通过 U盘物理搬运代码
+- 🔒 **涉密环境**：专为军工、涉密单位设计，确保数据不出内网
+- 💾 **离线同步**：两台不联网的机器之间同步 Git 仓库
+- 🚫 **零网络依赖**：不依赖任何外部服务，纯本地运行
+- ✅ **完整历史**：保留完整的提交历史和三方合并能力
+
+**典型用户**：军工科研院所、涉密研发团队、物理隔离环境开发人员
+
+---
+
 ## 功能特性
 
 - **Bundle 导出**：增量同步，基于 sync tag 自动检测待同步提交
@@ -21,6 +35,20 @@
 - **Conflict Resolution**: Three-column view (Local/Base/Remote), 5 auto-resolve patterns
 - **Cross-platform**: macOS, Windows, Linux
 - **Offline**: No network required, Petite-Vue bundled locally
+
+---
+
+## 🎯 Use Cases
+
+**Military · Classified Intranet · Air-gapped Networks · One-way Import**
+
+- 🛡️ **Physically Isolated Networks**: No internet needed, transfer code via USB
+- 🔒 **Classified Environments**: Designed for military and classified organizations
+- 💾 **Offline Sync**: Sync Git repos between disconnected machines
+- 🚫 **Zero Network Dependency**: No external services, runs entirely locally
+- ✅ **Full History**: Preserves complete commit history and 3-way merge capability
+
+**Typical Users**: Military research institutes, classified dev teams, air-gapped environment developers
 
 ---
 
