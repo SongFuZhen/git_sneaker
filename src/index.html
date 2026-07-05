@@ -116,13 +116,13 @@
             </div>
 
             <div v-if="currentFile" class="toolbar">
-                <button class="btn btn-secondary" @click="prevFile" :disabled="selectedFile === 0">Prev</button>
+                <button class="btn btn-secondary" @click="prevFile" :disabled="selectedFile === 0">上一个文件</button>
                 <span>{{ currentFile.path }}</span>
-                <button class="btn btn-secondary" @click="nextFile" :disabled="selectedFile >= conflicts.length - 1">Next</button>
+                <button class="btn btn-secondary" @click="nextFile" :disabled="selectedFile >= conflicts.length - 1">下一个文件</button>
                 <span class="spacer"></span>
-                <span>Hunk {{ selectedHunk + 1 }}/{{ currentFile.hunks.length }}</span>
-                <button class="btn btn-secondary" @click="prevHunk" :disabled="selectedHunk === 0">Prev</button>
-                <button class="btn btn-secondary" @click="nextHunk" :disabled="selectedHunk >= currentFile.hunks.length - 1">Next</button>
+                <span>差异块 {{ selectedHunk + 1 }}/{{ currentFile.hunks.length }}</span>
+                <button class="btn btn-secondary" @click="prevHunk" :disabled="selectedHunk === 0">上一个差异块</button>
+                <button class="btn btn-secondary" @click="nextHunk" :disabled="selectedHunk >= currentFile.hunks.length - 1">下一个差异块</button>
             </div>
 
             <div v-if="currentHunk" class="diff-threeway">
