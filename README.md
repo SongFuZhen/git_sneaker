@@ -280,8 +280,8 @@ A: Current version supports only the HEAD branch. Multi-branch planned for futur
 
 ## 许可证
 
-TBD
+[MIT](LICENSE)
 
 ## License
 
-TBD
+[MIT](LICENSE)
